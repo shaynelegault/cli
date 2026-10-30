@@ -1,0 +1,86 @@
+name: Validate CLI hardware routing
+on:
+  push:
+    branches: [codex/cli-ci-routing-validation]
+permissions:
+  contents: read
+jobs:
+  routing:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - event_name: 'pull_request'
+            ref_type: 'branch'
+            hardware_tag: ''
+            hardware_run_id: ''
+            expected_tag: 'v0.1.11'
+            expected_source: 'true'
+            expected_release: 'false'
+            expected_artifact: 'false'
+          - event_name: 'push'
+            ref_type: 'branch'
+            hardware_tag: ''
+            hardware_run_id: ''
+            expected_tag: 'v0.1.11'
+            expected_source: 'true'
+            expected_release: 'false'
+            expected_artifact: 'false'
+          - event_name: 'push'
+            ref_type: 'tag'
+            hardware_tag: ''
+            hardware_run_id: ''
+            expected_tag: 'v0.1.11'
+            expected_source: 'false'
+            expected_release: 'true'
+            expected_artifact: 'false'
+          - event_name: 'workflow_dispatch'
+            ref_type: 'branch'
+            hardware_tag: 'v0.1.11'
+            hardware_run_id: ''
+            expected_tag: 'v0.1.11'
+            expected_source: 'false'
+            expected_release: 'true'
+            expected_artifact: 'false'
+          - event_name: 'workflow_dispatch'
+            ref_type: 'branch'
+            hardware_tag: 'v0.1.10'
+            hardware_run_id: ''
+            expected_tag: 'v0.1.10'
+            expected_source: 'false'
+            expected_release: 'true'
+            expected_artifact: 'false'
+          - event_name: 'workflow_dispatch'
+            ref_type: 'branch'
+            hardware_tag: 'v0.1.11'
+            hardware_run_id: '123456'
+            expected_tag: 'v0.1.11'
+            expected_source: 'false'
+            expected_release: 'false'
+            expected_artifact: 'true'
+    env:
+      SELECTED_TAG: ${{ matrix.hardware_tag || 'v0.1.11' }}
+    steps:
+      - id: source
+        if: matrix.event_name == 'pull_request' || (matrix.event_name == 'push' && matrix.ref_type == 'branch')
+        run: echo "chosen=true" >> "$GITHUB_OUTPUT"
+      - id: release
+        if: matrix.event_name != 'pull_request' && (matrix.event_name != 'push' || matrix.ref_type != 'branch') && matrix.hardware_run_id == ''
+        run: echo "chosen=true" >> "$GITHUB_OUTPUT"
+      - id: artifact
+        if: matrix.hardware_run_id != ''
+        run: echo "chosen=true" >> "$GITHUB_OUTPUT"
+      - name: Check selected hardware path
+        env:
+          ACTUAL_SOURCE: ${{ steps.source.outputs.chosen || 'false' }}
+          ACTUAL_RELEASE: ${{ steps.release.outputs.chosen || 'false' }}
+          ACTUAL_ARTIFACT: ${{ steps.artifact.outputs.chosen || 'false' }}
+          EXPECTED_SOURCE: ${{ matrix.expected_source }}
+          EXPECTED_RELEASE: ${{ matrix.expected_release }}
+          EXPECTED_ARTIFACT: ${{ matrix.expected_artifact }}
+          EXPECTED_TAG: ${{ matrix.expected_tag }}
+        run: |
+          test "$SELECTED_TAG" = "$EXPECTED_TAG"
+          test "$ACTUAL_SOURCE" = "$EXPECTED_SOURCE"
+          test "$ACTUAL_RELEASE" = "$EXPECTED_RELEASE"
+          test "$ACTUAL_ARTIFACT" = "$EXPECTED_ARTIFACT"
